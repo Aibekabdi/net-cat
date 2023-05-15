@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"sync"
 )
@@ -26,4 +27,26 @@ func (s *Server) Shutdown() error {
 	}
 	s.mutex.Unlock()
 	return s.Server.Close()
+}
+
+func (s *Server) IsConnectable(conn net.Conn) bool {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if len(s.Conn) > MaxConnections || MaxConnections == 0 {
+		return false
+	} else {
+		return true
+	}
+}
+
+func (s *Server) ConnectMessenger(conn net.Conn) {
+	log.Println(conn)
+	s.Conn[conn] = "lol"
+	log.Println(s.Conn)
+	if !s.IsConnectable(conn) {
+		log.Println("The room is full, please try again later...")
+		conn.Write([]byte("The room is full, please try again later..."))
+		conn.Close()
+		return
+	}
 }

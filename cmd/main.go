@@ -36,7 +36,7 @@ func main() {
 			if err != nil {
 				break
 			}
-			log.Println(conn)
+			go srv.ConnectMessenger(conn)
 		}
 
 	}()
