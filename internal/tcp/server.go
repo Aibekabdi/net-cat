@@ -8,6 +8,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 )
 
 func (s *Server) Run(ip, port, transferProtocol string) error {
@@ -64,6 +65,8 @@ func (s *Server) ConnectMessenger(conn net.Conn) {
 		conn.Close()
 		return
 	}
+	s.startMessaging(conn)
+	s.removeConnection(conn)
 }
 
 func (s *Server) addConnection(conn net.Conn, name string) error {
@@ -80,4 +83,61 @@ func (s *Server) addConnection(conn net.Conn, name string) error {
 	s.Conn[conn] = name
 	log.Printf("Client %s connected by %v", name, conn.RemoteAddr())
 	return nil
+}
+
+func (s *Server) removeConnection(conn net.Conn) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	delete(s.Conn, conn)
+	log.Printf("Connection %v has left", conn.RemoteAddr())
+}
+
+func (s *Server) startMessaging(conn net.Conn) {
+	s.loadAllMsg(conn)
+	message := fmt.Sprintf(PatternJoinChat, s.Conn[conn])
+	s.sendMessage(conn, message)
+	for {
+		message, err := bufio.NewReader(conn).ReadString('\n')
+		if err != nil {
+			break
+		}
+		if message != "\n" {
+			time := time.Now().Format(TimeLayout)
+			message = fmt.Sprintf(PatternMessage, time, s.Conn[conn], message)
+		} else {
+			message = ""
+		}
+		s.sendMessage(conn, message)
+		s.saveMsg(message)
+	}
+	fmt.Fprintf(conn, PatternLeftChat, s.Conn[conn])
+}
+
+func (s *Server) loadAllMsg(conn net.Conn) {
+	for _, message := range s.AllMsg {
+		fmt.Fprint(conn, message)
+	}
+}
+
+func (s *Server) saveMsg(message string) {
+	s.mutex.Lock()
+	s.AllMsg = append(s.AllMsg, message)
+	s.mutex.Unlock()
+}
+
+func (s *Server) sendMessage(conn net.Conn, message string) {
+	time := time.Now().Format(TimeLayout)
+	if message == "" {
+		fmt.Fprintf(conn, PatternTyping, time, s.Conn[conn])
+		return
+	}
+
+	s.mutex.Lock()
+	for con := range s.Conn {
+		if con != conn {
+			fmt.Fprint(con, "!\n"+message)
+		}
+		fmt.Fprintf(con, PatternTyping, time, s.Conn[con])
+	}
+	s.mutex.Unlock()
 }

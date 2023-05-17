@@ -6,5 +6,6 @@ const (
 	TimeLayout           = "2006-01-02 15:04:05"
 	PatternJoinChat      = "%s has joined our chat...\n"
 	PatternLeftChat      = "%s has left our chat...\n"
-	PatternMessage       = "[%v][%s]:%s"
+	PatternMessage       = "[%v][%s]:%v"
+	PatternTyping        = "[%v][%v]:"
 )
