@@ -1,9 +1,12 @@
 package tcp
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 )
 
@@ -40,13 +43,41 @@ func (s *Server) IsConnectable(conn net.Conn) bool {
 }
 
 func (s *Server) ConnectMessenger(conn net.Conn) {
-	log.Println(conn)
-	s.Conn[conn] = "lol"
-	log.Println(s.Conn)
 	if !s.IsConnectable(conn) {
-		log.Println("The room is full, please try again later...")
-		conn.Write([]byte("The room is full, please try again later..."))
+		fmt.Fprintln(conn, "The room is full, please try again later...")
 		conn.Close()
 		return
 	}
+	fmt.Fprint(conn, AuthorizationMessage)
+	name, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil {
+		log.Fatalf("Authorization: %v", err)
+	}
+	name = strings.TrimSpace(name)
+	if len(name) == 0 {
+		fmt.Fprintln(conn, "Try again, name too large, max lenght 20 symbols")
+		conn.Close()
+		return
+	}
+	if err := s.addConnection(conn, name); err != nil {
+		fmt.Fprint(conn, err.Error())
+		conn.Close()
+		return
+	}
+}
+
+func (s *Server) addConnection(conn net.Conn, name string) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if MaxConnections != 0 && len(s.Conn) > MaxConnections {
+		return errors.New("The room is full, please try again later...")
+	}
+	for _, names := range s.Conn {
+		if names == name {
+			return fmt.Errorf("Name '%s' is Exist [%v]", name, conn.RemoteAddr())
+		}
+	}
+	s.Conn[conn] = name
+	log.Printf("Client %s connected by %v", name, conn.RemoteAddr())
+	return nil
 }
